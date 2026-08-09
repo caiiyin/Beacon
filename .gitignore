@@ -1,0 +1,11 @@
+node_modules/
+venv/
+.venv/
+__pycache__/
+*.pyc
+.env
+*.db
+.ipynb_checkpoints/
+dist/
+build/
+uploads/

@@ -1,0 +1,45 @@
+/* ─── Beacon 글로벌 스타일 ─────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  /* 메인 컬러: 민트/틸 계열 */
+  --color-primary:     #0ABFBC;
+  --color-primary-dark:#08999A;
+  --color-primary-light:#D0F5F5;
+
+  /* 보조 컬러: 위험도 표현 */
+  --color-safe:        #22C55E;   /* 안전/정상 */
+  --color-caution:     #F59E0B;   /* 주의 */
+  --color-danger:      #EF4444;   /* 위험 */
+  --color-critical:    #DC2626;   /* 긴급 */
+
+  /* 배경 & 텍스트 */
+  --color-bg:          #F0FAFA;
+  --color-card:        #FFFFFF;
+  --color-text:        #1A2F2F;
+  --color-text-sub:    #5A7A7A;
+  --color-border:      #D0EDED;
+
+  --radius-card:       1.25rem;
+  --radius-btn:        0.875rem;
+  --shadow-card:       0 4px 20px rgba(10,191,188,0.10);
+  --font-main:         'Segoe UI', 'Apple SD Gothic Neo', sans-serif;
+}
+
+body {
+  font-family: var(--font-main);
+  background: var(--color-bg);
+  color: var(--color-text);
+  min-height: 100dvh;
+}
+
+/* 모바일 최대 너비 (데스크탑에서는 가운데 정렬) */
+#root {
+  max-width: 480px;
+  margin: 0 auto;
+  min-height: 100dvh;
+  background: var(--color-bg);
+}
+
+button { cursor: pointer; border: none; background: none; font-family: inherit; }
+a { text-decoration: none; color: inherit; }
