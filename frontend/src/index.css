@@ -2,44 +2,53 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  /* 메인 컬러: 민트/틸 계열 */
-  --color-primary:     #0ABFBC;
-  --color-primary-dark:#08999A;
+  --color-primary:      #0ABFBC;
+  --color-primary-dark: #08999A;
   --color-primary-light:#D0F5F5;
 
-  /* 보조 컬러: 위험도 표현 */
-  --color-safe:        #22C55E;   /* 안전/정상 */
-  --color-caution:     #F59E0B;   /* 주의 */
-  --color-danger:      #EF4444;   /* 위험 */
-  --color-critical:    #DC2626;   /* 긴급 */
+  --color-safe:     #22C55E;
+  --color-caution:  #F59E0B;
+  --color-danger:   #EF4444;
+  --color-critical: #DC2626;
 
-  /* 배경 & 텍스트 */
-  --color-bg:          #F0FAFA;
-  --color-card:        #FFFFFF;
-  --color-text:        #1A2F2F;
-  --color-text-sub:    #5A7A7A;
-  --color-border:      #D0EDED;
+  --color-bg:       #F0FAFA;
+  --color-card:     #FFFFFF;
+  --color-text:     #1A2F2F;
+  --color-text-sub: #5A7A7A;
+  --color-border:   #D0EDED;
 
-  --radius-card:       1.25rem;
-  --radius-btn:        0.875rem;
-  --shadow-card:       0 4px 20px rgba(10,191,188,0.10);
-  --font-main:         'Segoe UI', 'Apple SD Gothic Neo', sans-serif;
+  --radius-card: 1.25rem;
+  --radius-btn:  0.875rem;
+  --shadow-card: 0 4px 20px rgba(10,191,188,0.10);
+  --font-main:   'Segoe UI', 'Apple SD Gothic Neo', sans-serif;
+
+  /* 헤더 높이 (sticky offset 계산용) */
+  --header-h: 56px;
 }
 
+/* PC에서 스마트폰 프레임처럼 보이는 배경 */
 body {
   font-family: var(--font-main);
-  background: var(--color-bg);
+  background: #B2C8C8;   /* 모바일 프레임 외부 배경 */
   color: var(--color-text);
   min-height: 100dvh;
 }
 
-/* 모바일 최대 너비 (데스크탑에서는 가운데 정렬) */
+/* 모바일 프레임 — 최대 430px, 중앙 정렬 */
 #root {
-  max-width: 480px;
+  max-width: 430px;
   margin: 0 auto;
   min-height: 100dvh;
   background: var(--color-bg);
+  /* PC에서 프레임 느낌을 주는 그림자 */
+  box-shadow: 0 0 0 1px rgba(0,0,0,.08), 0 8px 48px rgba(0,0,0,.20);
+  position: relative;
+  overflow-x: hidden;
 }
 
 button { cursor: pointer; border: none; background: none; font-family: inherit; }
 a { text-decoration: none; color: inherit; }
+
+/* 가로 슬라이더 스크롤바 숨김 (크로스브라우저) */
+.hide-scrollbar::-webkit-scrollbar { display: none; }
+.hide-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }

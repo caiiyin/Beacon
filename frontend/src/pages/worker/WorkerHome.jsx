@@ -1,30 +1,31 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { Link } from 'react-router-dom'
 import { useLang } from '../../App.jsx'
 import { t } from '../../i18n/index.js'
 import { getHazardEvents, getVoiceReports } from '../../api/index.js'
 import { useWebSocket } from '../../api/useWebSocket.js'
 import VoiceRecorder from '../../components/VoiceRecorder.jsx'
 
-// 로그인 구현 전 임시 worker_id (브라우저별로 고정)
 const DEMO_WORKER_ID = (() => {
-  const stored = localStorage.getItem('beacon_worker_id')
-  if (stored) return Number(stored)
+  const s = localStorage.getItem('beacon_worker_id')
+  if (s) return Number(s)
   const id = Math.floor(Math.random() * 900) + 100
   localStorage.setItem('beacon_worker_id', id)
   return id
 })()
 
 const SEV_COLOR = {
-  low:      { bg: '#F0FDF4', text: '#166534', dot: '#22C55E' },
-  medium:   { bg: '#FFFBEB', text: '#92400E', dot: '#F59E0B' },
-  high:     { bg: '#FFF7ED', text: '#9A3412', dot: '#F97316' },
-  critical: { bg: '#FEF2F2', text: '#991B1B', dot: '#EF4444' },
+  low:      { bg: '#F0FDF4', text: '#166534', dot: '#22C55E', badge: '#BBF7D0' },
+  medium:   { bg: '#FFFBEB', text: '#92400E', dot: '#F59E0B', badge: '#FDE68A' },
+  high:     { bg: '#FFF7ED', text: '#9A3412', dot: '#F97316', badge: '#FED7AA' },
+  critical: { bg: '#FEF2F2', text: '#991B1B', dot: '#EF4444', badge: '#FECACA' },
 }
-const HAZARD_ICON  = { helmet_missing:'⛑️', vest_missing:'🦺', restricted_zone:'🚧', fire_smoke:'🔥' }
+const SEV_LABEL   = { low:'낮음', medium:'보통', high:'높음', critical:'긴급' }
+const HAZARD_ICON = { helmet_missing:'⛑️', vest_missing:'🦺', restricted_zone:'🚧', fire_smoke:'🔥' }
 const STATUS_STYLE = {
-  received:   { bg: '#EFF6FF', text: '#1D4ED8', label: '접수됨' },
-  processing: { bg: '#FFFBEB', text: '#92400E', label: '처리중' },
-  completed:  { bg: '#F0FDF4', text: '#166534', label: '완료' },
+  received:   { bg:'#EFF6FF', text:'#1D4ED8', label:'접수됨' },
+  processing: { bg:'#FFFBEB', text:'#92400E', label:'처리중' },
+  completed:  { bg:'#F0FDF4', text:'#166534', label:'완료' },
 }
 
 function timeAgo(dateStr) {
@@ -39,18 +40,18 @@ function calcSafetyScore(events) {
   return Math.max(0, 100 - events.slice(0,10).reduce((a,e) => a+(p[e.severity]||0), 0))
 }
 function scoreGrade(score) {
-  if (score >= 90) return { label: '매우 안전', emoji: '🟢' }
-  if (score >= 70) return { label: '양호',     emoji: '🟡' }
-  if (score >= 50) return { label: '주의',     emoji: '🟠' }
-  return              { label: '위험',     emoji: '🔴' }
+  if (score >= 90) return { label:'매우 안전', emoji:'🟢' }
+  if (score >= 70) return { label:'양호',      emoji:'🟡' }
+  if (score >= 50) return { label:'주의',      emoji:'🟠' }
+  return              { label:'위험',      emoji:'🔴' }
 }
 
 export default function WorkerHome() {
-  const { lang }  = useLang()
+  const { lang } = useLang()
   const [events,  setEvents]  = useState([])
   const [reports, setReports] = useState([])
   const [wsConn,  setWsConn]  = useState(false)
-  const [popup,   setPopup]   = useState(null)   // 긴급 알림 팝업
+  const [popup,   setPopup]   = useState(null)
   const popupTimer = useRef(null)
 
   const fetchAll = useCallback(async () => {
@@ -67,11 +68,9 @@ export default function WorkerHome() {
     return () => clearInterval(id)
   }, [fetchAll])
 
-  // ── WebSocket: 근로자 채널 ────────────────────────────────────────
   const handleWsMsg = useCallback((msg) => {
-    if (msg.type === 'connected') {
-      setWsConn(true)
-    }
+    if (msg.type === 'connected') setWsConn(true)
+
     if (msg.type === 'hazard_alert') {
       setEvents(prev => {
         if (prev.some(e => e.id === msg.id)) return prev
@@ -91,15 +90,17 @@ export default function WorkerHome() {
     if (msg.type === 'admin_reply') fetchAll()
   }, [fetchAll])
 
-  const { send } = useWebSocket(`/ws/worker/${DEMO_WORKER_ID}`, handleWsMsg)
+  const { send } = useWebSocket(
+    `/ws/worker/${DEMO_WORKER_ID}`, handleWsMsg, true,
+    { onClose: () => setWsConn(false) }
+  )
 
   useEffect(() => {
     const id = setInterval(() => send('ping'), 30000)
     return () => clearInterval(id)
   }, [send])
 
-  // VoiceRecorder 완료 콜백
-  const handleReportComplete = useCallback(() => { fetchAll() }, [fetchAll])
+  const handleReportComplete = useCallback(() => fetchAll(), [fetchAll])
 
   const score = calcSafetyScore(events)
   const { label: grade, emoji } = scoreGrade(score)
@@ -109,17 +110,17 @@ export default function WorkerHome() {
       ? 'linear-gradient(135deg,#F59E0B,#D97706)'
       : 'linear-gradient(135deg,#EF4444,#DC2626)'
 
-  const myReports = reports.slice(0, 3)
-  const popupCol  = popup ? (SEV_COLOR[popup.severity] || SEV_COLOR.high) : null
+  const pendingCount = reports.filter(r => r.status !== 'completed').length
+  const popupCol = popup ? (SEV_COLOR[popup.severity] || SEV_COLOR.high) : null
 
   return (
     <main style={s.main}>
 
-      {/* ── 긴급 알림 팝업 ───────────────────────────────────────── */}
+      {/* ── 긴급 알림 팝업 ─────────────────────────────────────── */}
       {popup && popupCol && (
-        <div style={{ ...s.popup, background: popupCol.bg, borderColor: popupCol.border || popupCol.dot }}>
+        <div style={{ ...s.popup, background: popupCol.bg, borderColor: popupCol.dot }}>
           <span style={s.popupIcon}>{popup.icon}</span>
-          <div style={{ flex: 1 }}>
+          <div style={{ flex:1 }}>
             <p style={{ ...s.popupTitle, color: popupCol.text }}>
               {popup.severity === 'critical' ? '🚨 긴급 위험 발생' : '⚠️ 위험 감지'}
             </p>
@@ -129,11 +130,11 @@ export default function WorkerHome() {
         </div>
       )}
 
-      {/* ── 안전 점수 카드 ───────────────────────────────────────── */}
+      {/* ── 안전 점수 카드 ─────────────────────────────────────── */}
       <div style={{ ...s.scoreCard, background: cardGrad }}>
         <div style={s.scoreTop}>
           <span style={s.scoreLabel}>{t(lang, 'safetyScore')}</span>
-          <span style={{ ...s.wsChip, background: wsConn ? 'rgba(255,255,255,.3)' : 'rgba(255,100,100,.4)' }}>
+          <span style={{ ...s.wsChip, background: wsConn ? 'rgba(255,255,255,.3)' : 'rgba(255,80,80,.4)' }}>
             {wsConn ? '● 실시간' : '○ 연결 중'}
           </span>
         </div>
@@ -149,7 +150,7 @@ export default function WorkerHome() {
         </div>
       </div>
 
-      {/* ── 최근 안전 알림 ───────────────────────────────────────── */}
+      {/* ── 최근 안전 알림 — 가로 슬라이더 ───────────────────── */}
       <section style={s.section}>
         <h2 style={s.sectionTitle}>{t(lang, 'recentAlerts')}</h2>
         {events.length === 0
@@ -157,92 +158,65 @@ export default function WorkerHome() {
               <span style={{ fontSize:'1.8rem' }}>🔔</span>
               <p style={s.emptyText}>{t(lang, 'noAlerts')}</p>
             </div>
-          : <div style={s.list}>
-              {events.slice(0,5).map(ev => {
-                const col = SEV_COLOR[ev.severity] || SEV_COLOR.medium
-                return (
-                  <div key={ev.id} style={{ ...s.alertCard, background: col.bg }}>
-                    <span style={{ ...s.dot, background: col.dot }} />
-                    <span style={s.alertIcon}>{HAZARD_ICON[ev.type]||'⚠️'}</span>
-                    <div style={s.alertBody}>
-                      <span style={{ ...s.alertType, color: col.text }}>
+          : <>
+              <div className="hide-scrollbar" style={s.slider}>
+                {events.slice(0, 15).map(ev => {
+                  const col = SEV_COLOR[ev.severity] || SEV_COLOR.medium
+                  return (
+                    <div key={ev.id} style={{ ...s.sliderCard, background: col.bg }}>
+                      <span style={s.sliderIcon}>{HAZARD_ICON[ev.type]||'⚠️'}</span>
+                      <span style={{ ...s.sliderType, color: col.text }}>
                         {t(lang, `hazardType.${ev.type}`)}
                       </span>
-                      <span style={s.alertSub}>📍 {ev.zone}</span>
+                      <span style={s.sliderZone} title={ev.zone}>{ev.zone}</span>
+                      <span style={{ ...s.sliderBadge, background: col.badge, color: col.text }}>
+                        {SEV_LABEL[ev.severity]}
+                      </span>
+                      <span style={s.sliderTime}>{timeAgo(ev.detected_at)}</span>
                     </div>
-                    <span style={s.alertTime}>{timeAgo(ev.detected_at)}</span>
-                  </div>
-                )
-              })}
-              {events.length > 5 && <p style={s.moreText}>+ {events.length-5}건 더</p>}
-            </div>
+                  )
+                })}
+              </div>
+              {events.length > 3 && (
+                <p style={s.sliderHint}>← 옆으로 밀어서 더 보기</p>
+              )}
+            </>
         }
       </section>
 
-      {/* ── 음성 신고 ────────────────────────────────────────────── */}
+      {/* ── 음성 신고 ──────────────────────────────────────────── */}
       <section style={s.section}>
         <h2 style={s.sectionTitle}>{t(lang, 'reportIncident')}</h2>
-        <VoiceRecorder
-          lang={lang}
-          workerId={DEMO_WORKER_ID}
-          onComplete={handleReportComplete}
-        />
-      </section>
+        <VoiceRecorder lang={lang} workerId={DEMO_WORKER_ID} onComplete={handleReportComplete} />
 
-      {/* ── 내 신고 내역 ─────────────────────────────────────────── */}
-      {myReports.length > 0 && (
-        <section style={s.section}>
-          <h2 style={s.sectionTitle}>📋 신고 내역</h2>
-          <div style={s.list}>
-            {myReports.map(r => {
-              const st = STATUS_STYLE[r.status] || STATUS_STYLE.received
-              return (
-                <div key={r.id} style={s.reportCard}>
-                  <div style={s.reportTop}>
-                    <span style={s.alertIcon}>🎙️</span>
-                    <div style={s.alertBody}>
-                      <span style={s.alertType}>
-                        {(r.original_text || '').slice(0, 40)}{r.original_text?.length > 40 ? '…' : ''}
-                      </span>
-                      <span style={s.alertSub}>{timeAgo(r.created_at)}</span>
-                    </div>
-                    <span style={{ ...s.statusChip, background: st.bg, color: st.text }}>
-                      {st.label}
-                    </span>
-                  </div>
-                  {r.admin_reply_translated && (
-                    <div style={s.replyBox}>
-                      <span style={s.replyLabel}>💬 {t(lang, 'adminMenu')} 답변</span>
-                      <p style={s.replyText}>{r.admin_reply_translated}</p>
-                    </div>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-        </section>
-      )}
+        {/* 신고내역 보기 버튼 */}
+        <Link to="/worker/reports" style={s.historyBtn}>
+          📋 신고내역 보기
+          {pendingCount > 0 && (
+            <span style={s.historyBadge}>{pendingCount}</span>
+          )}
+        </Link>
+      </section>
 
     </main>
   )
 }
 
-// ── 스타일 ────────────────────────────────────────────────────────────
 const s = {
-  main:    { padding:'1rem', display:'flex', flexDirection:'column', gap:'1rem' },
-  section: { display:'flex', flexDirection:'column', gap:'0.75rem' },
-  sectionTitle: { fontSize:'1rem', fontWeight:700 },
+  main:         { padding:'1rem', display:'flex', flexDirection:'column', gap:'1rem' },
+  section:      { display:'flex', flexDirection:'column', gap:'0.625rem' },
+  sectionTitle: { fontSize:'1rem', fontWeight:800 },
 
   popup:      { display:'flex', alignItems:'center', gap:'0.75rem', padding:'0.875rem 1rem', borderRadius:'var(--radius-card)', border:'2px solid', boxShadow:'0 4px 20px rgba(0,0,0,.15)' },
   popupIcon:  { fontSize:'2rem', flexShrink:0 },
   popupTitle: { fontSize:'0.9rem', fontWeight:800, margin:0 },
   popupSub:   { fontSize:'0.8rem', margin:'0.2rem 0 0' },
-  popupClose: { fontSize:'1.1rem', cursor:'pointer', background:'none', border:'none', opacity:0.6, flexShrink:0 },
+  popupClose: { fontSize:'1.1rem', background:'none', border:'none', opacity:0.6, flexShrink:0, padding:'0.5rem', cursor:'pointer' },
 
   scoreCard:   { borderRadius:'var(--radius-card)', padding:'1.25rem 1.5rem', color:'#fff', boxShadow:'0 6px 24px rgba(10,191,188,.25)' },
   scoreTop:    { display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'0.75rem' },
   scoreLabel:  { fontSize:'0.85rem', opacity:.9 },
-  wsChip:      { fontSize:'0.72rem', fontWeight:700, borderRadius:'2rem', padding:'0.2rem 0.6rem' },
+  wsChip:      { fontSize:'0.72rem', fontWeight:700, borderRadius:'2rem', padding:'0.2rem 0.625rem' },
   scoreRow:    { display:'flex', alignItems:'center', gap:'1.5rem' },
   scoreCircle: { display:'flex', alignItems:'baseline', gap:'0.2rem' },
   scoreNum:    { fontSize:'3.5rem', fontWeight:800, lineHeight:1 },
@@ -254,20 +228,63 @@ const s = {
   emptyCard: { background:'#fff', borderRadius:'var(--radius-card)', padding:'1.5rem', textAlign:'center', boxShadow:'var(--shadow-card)', display:'flex', flexDirection:'column', alignItems:'center', gap:'0.5rem' },
   emptyText: { color:'var(--color-text-sub)', fontSize:'0.9rem' },
 
-  list:      { display:'flex', flexDirection:'column', gap:'0.5rem' },
-  alertCard: { borderRadius:'0.875rem', padding:'0.75rem 1rem', display:'flex', alignItems:'center', gap:'0.6rem', boxShadow:'0 2px 8px rgba(0,0,0,.05)' },
-  dot:       { width:8, height:8, borderRadius:'50%', flexShrink:0 },
-  alertIcon: { fontSize:'1.25rem', flexShrink:0 },
-  alertBody: { flex:1, display:'flex', flexDirection:'column', gap:'0.1rem' },
-  alertType: { fontSize:'0.88rem', fontWeight:700 },
-  alertSub:  { fontSize:'0.78rem', color:'var(--color-text-sub)' },
-  alertTime: { fontSize:'0.72rem', color:'var(--color-text-sub)', flexShrink:0 },
-  moreText:  { fontSize:'0.8rem', color:'var(--color-text-sub)', textAlign:'center' },
+  /* ── 가로 슬라이더 ── */
+  slider: {
+    display: 'flex',
+    overflowX: 'auto',
+    scrollSnapType: 'x mandatory',
+    WebkitOverflowScrolling: 'touch',
+    gap: '0.5rem',
+    paddingBottom: '0.25rem',
+  },
+  sliderCard: {
+    /* 3개가 한 화면에 보임 + 살짝 잘려 스크롤 유도 */
+    minWidth: 'calc(33.33% - 0.35rem)',
+    maxWidth: 'calc(33.33% - 0.35rem)',
+    scrollSnapAlign: 'start',
+    flexShrink: 0,
+    borderRadius: '0.875rem',
+    padding: '0.75rem 0.5rem',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: '0.3rem',
+    boxShadow: '0 2px 8px rgba(0,0,0,.05)',
+  },
+  sliderIcon:  { fontSize: '1.5rem' },
+  sliderType:  { fontSize: '0.68rem', fontWeight:700, textAlign:'center', lineHeight:1.3, display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical', overflow:'hidden' },
+  sliderZone:  { fontSize: '0.65rem', color:'var(--color-text-sub)', textAlign:'center', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', width:'100%' },
+  sliderBadge: { fontSize: '0.63rem', fontWeight:700, padding:'0.15rem 0.4rem', borderRadius:'2rem', whiteSpace:'nowrap' },
+  sliderTime:  { fontSize: '0.62rem', color:'var(--color-text-sub)' },
+  sliderHint:  { fontSize:'0.72rem', color:'var(--color-text-sub)', textAlign:'center' },
 
-  reportCard:  { background:'#fff', borderRadius:'0.875rem', padding:'0.875rem 1rem', boxShadow:'var(--shadow-card)', display:'flex', flexDirection:'column', gap:'0.5rem' },
-  reportTop:   { display:'flex', alignItems:'center', gap:'0.6rem' },
-  statusChip:  { padding:'0.2rem 0.6rem', borderRadius:'2rem', fontSize:'0.72rem', fontWeight:700, flexShrink:0 },
-  replyBox:    { background:'#F0FDF4', borderRadius:'0.5rem', padding:'0.6rem 0.75rem', display:'flex', flexDirection:'column', gap:'0.2rem' },
-  replyLabel:  { fontSize:'0.72rem', fontWeight:700, color:'#166534' },
-  replyText:   { fontSize:'0.88rem', color:'#166534', lineHeight:1.5 },
+  /* ── 신고내역 버튼 ── */
+  historyBtn: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '0.5rem',
+    height: 48,
+    borderRadius: 'var(--radius-btn)',
+    background: 'var(--color-primary-light)',
+    color: 'var(--color-primary-dark)',
+    fontSize: '0.9rem',
+    fontWeight: 700,
+    textDecoration: 'none',
+    border: '1.5px solid var(--color-primary)',
+    position: 'relative',
+  },
+  historyBadge: {
+    background: 'var(--color-danger)',
+    color: '#fff',
+    borderRadius: '50%',
+    minWidth: 20,
+    height: 20,
+    fontSize: '0.7rem',
+    fontWeight: 700,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '0 4px',
+  },
 }

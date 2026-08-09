@@ -3,6 +3,9 @@ import { useLang } from '../../App.jsx'
 import { t } from '../../i18n/index.js'
 import { getHazardEvents, getVoiceReports, postAdminReply } from '../../api/index.js'
 import { useWebSocket } from '../../api/useWebSocket.js'
+import Pagination from '../../components/Pagination.jsx'
+
+const PER_PAGE = 5
 
 // ── 상수 ─────────────────────────────────────────────────────────────
 const SEV_COLOR = {
@@ -54,6 +57,8 @@ export default function AdminDashboard() {
   const [toasts,    setToasts]    = useState([])
   const [reportFlt, setReportFlt] = useState('전체')
   const [wsStatus,  setWsStatus]  = useState(null)   // { admins, workers }
+  const [evtPage,   setEvtPage]   = useState(1)
+  const [rptPage,   setRptPage]   = useState(1)
   const toastId = useRef(0)
 
   // ── 토스트 표시 헬퍼 ────────────────────────────────────────────────
@@ -165,6 +170,23 @@ export default function AdminDashboard() {
   const filteredRpts  = filterStatus ? reports.filter(r => r.status === filterStatus) : reports
   const pendingCount  = reports.filter(r => r.status !== 'completed').length
 
+  // 페이지네이션된 슬라이스
+  const paginatedEvts = events.slice((evtPage - 1) * PER_PAGE, evtPage * PER_PAGE)
+  const paginatedRpts = filteredRpts.slice((rptPage - 1) * PER_PAGE, rptPage * PER_PAGE)
+
+  function handleFilterChange(f) {
+    setReportFlt(f)
+    setRptPage(1)
+  }
+  function handleEvtPageChange(p) {
+    setEvtPage(p)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+  function handleRptPageChange(p) {
+    setRptPage(p)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
   return (
     <main style={s.main}>
       {/* CSS 애니메이션 */}
@@ -232,33 +254,41 @@ export default function AdminDashboard() {
           {/* 이벤트 목록 */}
           {events.length === 0
             ? <EmptyCard icon="📡" text="감지된 이벤트가 없습니다" sub="위 버튼으로 Mock 이벤트를 생성해보세요" />
-            : <div style={s.list}>
-                {events.map(ev => {
-                  const col = SEV_COLOR[ev.severity] || SEV_COLOR.medium
-                  return (
-                    <div key={ev.id} style={{ ...s.card, borderLeftColor: col.border }}>
-                      <span style={s.cardIcon}>{HAZARD_ICON[ev.type]||'⚠️'}</span>
-                      <div style={s.cardBody}>
-                        <span style={s.cardTitle}>{t(lang, `hazardType.${ev.type}`)}</span>
-                        <span style={s.cardSub}>📍 {ev.zone}</span>
-                      </div>
-                      <div style={s.cardRight}>
-                        <div style={{ display:'flex', gap:'0.3rem', justifyContent:'flex-end' }}>
-                          <span style={{ ...s.badge, background: col.bg, color: col.text, borderColor: col.border }}>
-                            {SEV_LABEL[ev.severity]}
-                          </span>
-                          {ev.source && (
-                            <span style={{ ...s.badge, background:'#F8FAFC', color:'#475569', borderColor:'#E2E8F0' }}>
-                              {SOURCE_ICON[ev.source]||'📡'} {ev.source}
-                            </span>
-                          )}
+            : <>
+                <div style={s.list}>
+                  {paginatedEvts.map(ev => {
+                    const col = SEV_COLOR[ev.severity] || SEV_COLOR.medium
+                    return (
+                      <div key={ev.id} style={{ ...s.card, borderLeftColor: col.border }}>
+                        <span style={s.cardIcon}>{HAZARD_ICON[ev.type]||'⚠️'}</span>
+                        <div style={s.cardBody}>
+                          <span style={s.cardTitle}>{t(lang, `hazardType.${ev.type}`)}</span>
+                          <span style={s.cardSub}>📍 {ev.zone}</span>
                         </div>
-                        <span style={s.time}>{timeAgo(ev.detected_at)}</span>
+                        <div style={s.cardRight}>
+                          <div style={{ display:'flex', gap:'0.3rem', justifyContent:'flex-end' }}>
+                            <span style={{ ...s.badge, background: col.bg, color: col.text, borderColor: col.border }}>
+                              {SEV_LABEL[ev.severity]}
+                            </span>
+                            {ev.source && (
+                              <span style={{ ...s.badge, background:'#F8FAFC', color:'#475569', borderColor:'#E2E8F0' }}>
+                                {SOURCE_ICON[ev.source]||'📡'} {ev.source}
+                              </span>
+                            )}
+                          </div>
+                          <span style={s.time}>{timeAgo(ev.detected_at)}</span>
+                        </div>
                       </div>
-                    </div>
-                  )
-                })}
-              </div>
+                    )
+                  })}
+                </div>
+                <Pagination
+                  total={events.length}
+                  page={evtPage}
+                  perPage={PER_PAGE}
+                  onChange={handleEvtPageChange}
+                />
+              </>
           }
         </section>
       )}
@@ -281,7 +311,7 @@ export default function AdminDashboard() {
             {REPORT_FILTERS.map(f => (
               <button
                 key={f}
-                onClick={() => setReportFlt(f)}
+                onClick={() => handleFilterChange(f)}
                 style={{ ...s.filterBtn, ...(reportFlt === f ? s.filterBtnActive : {}) }}
               >
                 {f}
@@ -298,9 +328,17 @@ export default function AdminDashboard() {
           {filteredRpts.length === 0
             ? <EmptyCard icon="🎙️" text={reportFlt === '전체' ? '접수된 신고가 없습니다' : `${reportFlt} 상태의 신고가 없습니다`}
                          sub={reportFlt === '전체' ? '위 버튼으로 Mock 신고를 생성해보세요' : undefined} />
-            : <div style={s.list}>
-                {filteredRpts.map(r => <ReportCard key={r.id} report={r} onReply={fetchAll} />)}
-              </div>
+            : <>
+                <div style={s.list}>
+                  {paginatedRpts.map(r => <ReportCard key={r.id} report={r} onReply={fetchAll} />)}
+                </div>
+                <Pagination
+                  total={filteredRpts.length}
+                  page={rptPage}
+                  perPage={PER_PAGE}
+                  onChange={handleRptPageChange}
+                />
+              </>
           }
         </section>
       )}
