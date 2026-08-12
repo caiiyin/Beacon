@@ -5,6 +5,7 @@ import { t } from '../../i18n/index.js'
 import { getHazardEvents, getVoiceReports } from '../../api/index.js'
 import { useWebSocket } from '../../api/useWebSocket.js'
 import VoiceRecorder from '../../components/VoiceRecorder.jsx'
+import CameraModal from '../../components/CameraModal.jsx'
 
 const DEMO_WORKER_ID = (() => {
   const s = localStorage.getItem('beacon_worker_id')
@@ -52,6 +53,7 @@ export default function WorkerHome() {
   const [reports, setReports] = useState([])
   const [wsConn,  setWsConn]  = useState(false)
   const [popup,   setPopup]   = useState(null)
+  const [showCamera, setShowCamera] = useState(false)
   const popupTimer = useRef(null)
 
   const fetchAll = useCallback(async () => {
@@ -149,6 +151,18 @@ export default function WorkerHome() {
           </div>
         </div>
       </div>
+
+      {/* ── PPE 카메라 탐지 버튼 ──────────────────────────────── */}
+      <button style={s.cameraBtn} onClick={() => setShowCamera(true)}>
+        <span style={{ fontSize: '1.4rem' }}>📷</span>
+        <div style={s.cameraBtnText}>
+          <span style={s.cameraBtnTitle}>PPE 안전장비 탐지</span>
+          <span style={s.cameraBtnSub}>카메라로 안전모·조끼 착용 확인</span>
+        </div>
+        <span style={s.cameraBtnArrow}>▶</span>
+      </button>
+
+      {showCamera && <CameraModal onClose={() => setShowCamera(false)} />}
 
       {/* ── 최근 안전 알림 — 가로 슬라이더 ───────────────────── */}
       <section style={s.section}>
@@ -274,6 +288,20 @@ const s = {
     border: '1.5px solid var(--color-primary)',
     position: 'relative',
   },
+  cameraBtn: {
+    display: 'flex', alignItems: 'center', gap: '0.875rem',
+    padding: '0.875rem 1rem',
+    background: 'linear-gradient(135deg, #0ABFBC, #0891B2)',
+    border: 'none', borderRadius: 'var(--radius-card)',
+    color: '#fff', cursor: 'pointer', width: '100%',
+    boxShadow: '0 4px 16px rgba(10,191,188,0.35)',
+    textAlign: 'left',
+  },
+  cameraBtnText:  { display: 'flex', flexDirection: 'column', gap: '0.1rem', flex: 1 },
+  cameraBtnTitle: { fontSize: '0.95rem', fontWeight: 800 },
+  cameraBtnSub:   { fontSize: '0.75rem', opacity: 0.85 },
+  cameraBtnArrow: { fontSize: '0.85rem', opacity: 0.7 },
+
   historyBadge: {
     background: 'var(--color-danger)',
     color: '#fff',

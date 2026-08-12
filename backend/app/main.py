@@ -16,7 +16,7 @@ from fastapi.responses import FileResponse
 from dotenv import load_dotenv
 
 from app.db import engine, Base
-from app.api import hazard_events, alerts, voice_report, websocket
+from app.api import hazard_events, alerts, voice_report, websocket, camera
 
 load_dotenv()
 
@@ -60,6 +60,7 @@ app.include_router(hazard_events.router)
 app.include_router(alerts.router)
 app.include_router(voice_report.router)
 app.include_router(websocket.router)
+app.include_router(camera.router)
 
 
 @app.get("/health", tags=["헬스체크"])
